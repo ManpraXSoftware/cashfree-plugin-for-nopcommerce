@@ -120,6 +120,8 @@ namespace Nop.Plugin.Payments.CashfreePayments.Controllers
                 PaymentMethods = cashfreePaymentSettings.PaymentMethods,
                 ApiVersion = cashfreePaymentSettings.ApiVersion,
                 ActiveEnvironmentValues = await cashfreePaymentSettings.ActiveEnvironment.ToSelectListAsync(),
+                PaymentTypeId = Convert.ToInt32(cashfreePaymentSettings.PaymentType),
+                PaymentTypeValues = await cashfreePaymentSettings.PaymentType.ToSelectListAsync(),
                 ActiveStoreScopeConfiguration = storeScope
             };
 
@@ -133,6 +135,7 @@ namespace Nop.Plugin.Payments.CashfreePayments.Controllers
             model.ActiveEnvironmentId_OverrideForStore = await _settingService.SettingExistsAsync(cashfreePaymentSettings, x => x.ActiveEnvironment, storeScope);
             model.PaymentMethods_OverrideForStore = await _settingService.SettingExistsAsync(cashfreePaymentSettings, x => x.PaymentMethods, storeScope);
             model.ApiVersion_OverrideForStore = await _settingService.SettingExistsAsync(cashfreePaymentSettings, x => x.ApiVersion, storeScope);
+            model.PaymentTypeId_OverrideForStore = await _settingService.SettingExistsAsync(cashfreePaymentSettings, x => x.PaymentType, storeScope);
 
             return View("~/Plugins/Payments.CashfreePayments/Views/Configure.cshtml", model);
         }
@@ -159,7 +162,7 @@ namespace Nop.Plugin.Payments.CashfreePayments.Controllers
             cashfreePaymentSettings.Description = model.Description;
             cashfreePaymentSettings.ActiveEnvironment = (ActiveEnvironment)model.ActiveEnvironmentId;
             cashfreePaymentSettings.PaymentMethods = model.PaymentMethods;
-            
+            cashfreePaymentSettings.PaymentType = (PaymentType)model.PaymentTypeId;
             cashfreePaymentSettings.ApiVersion=model.ApiVersion;
 
             /* We do not clear cache after each setting update.
@@ -170,6 +173,7 @@ namespace Nop.Plugin.Payments.CashfreePayments.Controllers
             await _settingService.SaveSettingOverridablePerStoreAsync(cashfreePaymentSettings, x => x.SecretKey, model.SecretKey_OverrideForStore, storeScope, false);
             await _settingService.SaveSettingOverridablePerStoreAsync(cashfreePaymentSettings, x => x.Description, model.Description_OverrideForStore, storeScope, false);
             await _settingService.SaveSettingOverridablePerStoreAsync(cashfreePaymentSettings, x => x.ActiveEnvironment, model.ActiveEnvironmentId_OverrideForStore, storeScope, false);
+            await _settingService.SaveSettingOverridablePerStoreAsync(cashfreePaymentSettings, x => x.PaymentType, model.PaymentTypeId_OverrideForStore, storeScope, false);
             await _settingService.SaveSettingOverridablePerStoreAsync(cashfreePaymentSettings, x => x.PaymentMethods, model.PaymentMethods_OverrideForStore, storeScope, false);
             await _settingService.SaveSettingOverridablePerStoreAsync(cashfreePaymentSettings, x => x.ApiVersion, model.ApiVersion_OverrideForStore, storeScope, false);
 
@@ -211,6 +215,27 @@ namespace Nop.Plugin.Payments.CashfreePayments.Controllers
             string order_status = result2.order_status;//The order status -ACTIVE, PAID, EXPIRED
             string cf_order_id=result2.cf_order_id;
             var paymentstatus = PaymentStatus.Pending;
+
+            //get payment details of order
+            var client2 = new HttpClient();
+            client2.DefaultRequestHeaders.Add("x-api-version", _cashfreePaymentSettings.ApiVersion);
+            client2.DefaultRequestHeaders.Add("x-client-id", _cashfreePaymentSettings.AppID);
+            client2.DefaultRequestHeaders.Add("x-client-secret", _cashfreePaymentSettings.SecretKey);
+            //var paymentLink = result2.payments.url;
+            var paymentUrl = _cashfreePaymentSettings.ActiveEnvironment == 0 ?
+                new Uri("https://sandbox.cashfree.com/pg/orders/" + order_id + "/payments") :
+               new Uri("https://api.cashfree.com/pg/orders/" + order_id + "/payments");
+            var paymentResult = await client2.GetAsync(paymentUrl);
+            var paymentJson = paymentResult.Content.ReadAsStringAsync().Result;
+            dynamic paymentResult2 = JsonConvert.DeserializeObject(paymentJson);
+            //string a = paymentResult2.cf_payment_id;
+            //string isCaptured = paymentResult2.is_captured;
+            //string paymentStatus = paymentResult2.payment_status;
+            //var paymentstat = PaymentStatus.Pending;
+            //var paystatus = GetPaymentStatus(paymentStatus);
+            ///payment status ==SUCCESS,FAILED,MOT-ATTEMPTED,PENDING,FLAGGED,CAMCELLED,VOID,USER-DROPPED
+           
+
             if (order_status == "ACTIVE" || order_status == "active")
             {
                 //update payment_status=pending when cancel the transaction
@@ -226,12 +251,15 @@ namespace Nop.Plugin.Payments.CashfreePayments.Controllers
                 return RedirectToRoute("Homepage");
 
             }
-            else if (order_status == "PAID" || order_status == "paid")
+            else if (order_status == "PAID"  )
             {
+
+                // paymentstatus = paystatus;
                 paymentstatus = PaymentStatus.Paid;
+                 //updating ordernote and payment_status in Order
+                 await ProcessPaymentAsync(order.Id, paymentstatus, cf_order_id);
             }        
-            //updating ordernote and payment_status in Order
-            await ProcessPaymentAsync(order.Id, paymentstatus,cf_order_id);
+           
 
             return RedirectToRoute("CheckoutCompleted", new { orderId = order.Id });
         }      
@@ -350,8 +378,48 @@ namespace Nop.Plugin.Payments.CashfreePayments.Controllers
                     break;
             }
 
-        }                
-       
+        }
+        public static PaymentStatus GetPaymentStatus(string paymentStatus)
+        {
+            var result = PaymentStatus.Pending;
+
+            if (paymentStatus == null)
+                paymentStatus = string.Empty;
+
+            switch (paymentStatus.ToUpperInvariant())
+            {
+
+                case "PENDING":
+                    result = PaymentStatus.Pending;
+                    break;
+                case "SUCCESS":
+                    result = PaymentStatus.Paid;
+                    break;
+                case "FAILED":
+                  //  result = PaymentStatus.Voided;
+                    break;
+                case "CANCELLED":
+                  //  result = PaymentStatus.Voided;
+                    break;               
+                case "FLAGGED":
+                   // result = PaymentStatus.Voided;
+                    break;
+                case "VOID":
+                    result = PaymentStatus.Voided;
+                    break;
+                case "USER_DROPPED":
+                  //  result = PaymentStatus.Voided;
+                    break;
+                case "NOT_ATTEMPTED":
+                   // result = PaymentStatus.Voided;
+                    break;
+                default:
+                    break;
+            }
+
+            return result;
+        }
+
         #endregion
     }
 }

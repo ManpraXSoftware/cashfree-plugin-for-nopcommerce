@@ -26,15 +26,17 @@ namespace Nop.Plugin.Payments.CashfreePayments.Models
         public SelectList ActiveEnvironmentValues { get; set; }
         public bool ActiveEnvironmentId_OverrideForStore { get; set; }
 
-       // public int PaymentMethodsId { get; set; }
-        [NopResourceDisplayName("Plugins.Payments.CashfreePayments.Fields.PaymentMethods")]
-        public string PaymentMethods { get; set; }
-        public bool PaymentMethods_OverrideForStore { get; set; }
-
         [NopResourceDisplayName("Plugins.Payments.CashfreePayments.Fields.ApiVersion")]
         public string ApiVersion { get; set; }
         public bool ApiVersion_OverrideForStore { get; set; }
+        [NopResourceDisplayName("Plugins.Payments.CashfreePayments.Fields.PaymentMethods")]
+        public string PaymentMethods { get; set; }
+        public bool PaymentMethods_OverrideForStore { get; set; }
+        public int PaymentTypeId { get; set; }
 
+        [NopResourceDisplayName("Plugins.Payments.CashfreePayments.Fields.PaymentType")]
+        public SelectList PaymentTypeValues { get; set; }
+        public bool PaymentTypeId_OverrideForStore { get; set; }
 
         [NopResourceDisplayName("Plugins.Payments.CashfreePayments.Fields.AdditionalFee")]
         public decimal AdditionalFee { get; set; }

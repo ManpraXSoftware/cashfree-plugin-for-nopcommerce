@@ -25,6 +25,9 @@ using System.Net.Http;
 using Newtonsoft.Json;
 using System.Net.Http.Headers;
 using Nop.Core.Domain.Payments;
+using Nop.Services.Logging;
+using System.Xml;
+using Nop.Services.Security;
 
 namespace Nop.Plugin.Payments.CashfreePayments
 {
@@ -46,6 +49,9 @@ namespace Nop.Plugin.Payments.CashfreePayments
         private readonly IWorkContext _workContext;
         private readonly IStoreContext _storeContext;
         private readonly IOrderService _orderService;
+        private readonly ILogger _logger;
+        private readonly IOrderProcessingService _orderProcessingService;
+        private readonly IEncryptionService _encryptionService;
 
         public CashfreePaymentProcessor(ILocalizationService localizationService,
             ISettingService settingService,
@@ -61,7 +67,10 @@ namespace Nop.Plugin.Payments.CashfreePayments
             IHttpContextAccessor httpContextAccessor,
             IWorkContext workContext,
             IStoreContext storeContext,
-            IOrderService orderService)
+            IOrderService orderService,
+            ILogger logger,
+            IOrderProcessingService orderProcessingService,
+            IEncryptionService encryptionService)
         {
             _localizationService = localizationService;
             _settingService = settingService;
@@ -78,6 +87,9 @@ namespace Nop.Plugin.Payments.CashfreePayments
             _workContext = workContext;
             _storeContext = storeContext;
             _orderService = orderService;
+            _logger = logger;
+            _orderProcessingService = orderProcessingService;
+            _encryptionService = encryptionService;
         }
 
         public override async Task InstallAsync()
@@ -105,8 +117,7 @@ namespace Nop.Plugin.Payments.CashfreePayments
                 ["Plugins.Payments.CashfreePayments.Fields.RedirectionTip"] = "You will be redirected to Cashfree site to complete the order.",
                 ["Plugins.Payments.CashfreePayments.Fields.Instructions"] = @"
                     <p>
-                        <b>If you're using this gateway ensure that your primary store currency is supported by Cashfree.</b>
-	                    <br />
+                        <b>If you're using this gateway ensure that your primary store currency is supported by Cashfree.</b>	                    
                         <br />Follow these steps to configure your account for Payment:<br />
                         <br />1. Log in to your Cashfree account (click <a href=""https://www.cashfree.com/"" target=""_blank"">here</a> to create your account).
                         <br />2. Activate your Account (follow this <a href=""https://docs.cashfree.com/docs/activate-account"" target=""_blank"">document</a> to activate your account).
@@ -129,11 +140,11 @@ namespace Nop.Plugin.Payments.CashfreePayments
 
             await base.UninstallAsync();
         }
-         public bool SupportCapture => false;
+         public bool SupportCapture => true;
         public bool SupportPartiallyRefund => true;
         public bool SupportRefund => true;
-        public bool SupportVoid => false;
-        public RecurringPaymentType RecurringPaymentType => RecurringPaymentType.NotSupported;
+        public bool SupportVoid => true;
+        public RecurringPaymentType RecurringPaymentType => RecurringPaymentType.Automatic;
 
         public PaymentMethodType PaymentMethodType => PaymentMethodType.Redirection;
 
@@ -141,6 +152,7 @@ namespace Nop.Plugin.Payments.CashfreePayments
 
         public Task<CancelRecurringPaymentResult> CancelRecurringPaymentAsync(CancelRecurringPaymentRequest cancelPaymentRequest)
         {
+            //return Task.FromResult(new CancelRecurringPaymentResult());
             return Task.FromResult(new CancelRecurringPaymentResult { Errors = new[] { "Recurring payment not supported" } });
         }
 
@@ -174,14 +186,16 @@ namespace Nop.Plugin.Payments.CashfreePayments
             var stringdata = JsonConvert.SerializeObject(new AuthorizationModel()
             {
                 action = "CAPTURE",
-                amount = 2.0
+                amount = Convert.ToDouble(capturePaymentRequest.Order.OrderTotal)
             });
             var stringcontent = new StringContent(stringdata, Encoding.UTF8, "application/json");
             request.Content = stringcontent;
-            List<NameValueHeaderValue> listheaders = new List<NameValueHeaderValue>();
-            listheaders.Add(new NameValueHeaderValue("x-api-version", _cashfreePaymentSettings.ApiVersion));
-            listheaders.Add(new NameValueHeaderValue("x-client-id", _cashfreePaymentSettings.AppID));
-            listheaders.Add(new NameValueHeaderValue("x-client-secret", _cashfreePaymentSettings.SecretKey));
+            var listheaders = new List<NameValueHeaderValue>
+            {
+                new NameValueHeaderValue("x-api-version", _cashfreePaymentSettings.ApiVersion),
+                new NameValueHeaderValue("x-client-id", _cashfreePaymentSettings.AppID),
+                new NameValueHeaderValue("x-client-secret", _cashfreePaymentSettings.SecretKey)
+            };
             foreach (var header in listheaders)
             {
                 request.Headers.Add(header.Name, header.Value);
@@ -227,10 +241,12 @@ namespace Nop.Plugin.Payments.CashfreePayments
             });
             var stringcontent = new StringContent(stringdata, Encoding.UTF8, "application/json");
             request.Content = stringcontent;
-            List<NameValueHeaderValue> listheaders = new List<NameValueHeaderValue>();
-            listheaders.Add(new NameValueHeaderValue("x-api-version", _cashfreePaymentSettings.ApiVersion));
-            listheaders.Add(new NameValueHeaderValue("x-client-id", _cashfreePaymentSettings.AppID));
-            listheaders.Add(new NameValueHeaderValue("x-client-secret", _cashfreePaymentSettings.SecretKey));
+            var listheaders = new List<NameValueHeaderValue>
+            {
+                new NameValueHeaderValue("x-api-version", _cashfreePaymentSettings.ApiVersion),
+                new NameValueHeaderValue("x-client-id", _cashfreePaymentSettings.AppID),
+                new NameValueHeaderValue("x-client-secret", _cashfreePaymentSettings.SecretKey)
+            };
             foreach (var header in listheaders)
             {
                 request.Headers.Add(header.Name, header.Value);
@@ -259,7 +275,36 @@ namespace Nop.Plugin.Payments.CashfreePayments
 
         public Task<ProcessPaymentRequest> GetPaymentInfoAsync(IFormCollection form)
         {
-            return Task.FromResult(new ProcessPaymentRequest());
+            if (_cashfreePaymentSettings.PaymentType == 0)////AuthorizeAndCapture = 0 ,AuthorizeOnly = 1
+            {
+                return Task.FromResult(new ProcessPaymentRequest());
+            }
+            string upi = form["UpiId"];
+            string creditCardType = form["CreditCardType"];
+            string creditCardName = form["CreditCardName"];
+            string creditCardNumber = form["CreditCardNumber"];
+            string creditCardExpireMonth = form["CreditCardExpireMonth"];
+            string creditCardExpireYear = form["CreditCardExpireYear"];
+            string creditCardCvv2 = form["CreditCardCvv2"];
+
+            return Task.FromResult(new ProcessPaymentRequest
+            {
+                CreditCardType = form["CreditCardType"],
+                CreditCardName = form["CardholderName"],
+                CreditCardNumber = form["CardNumber"],
+                CreditCardExpireMonth = int.Parse(form["ExpireMonth"]),
+                CreditCardExpireYear = int.Parse(form["ExpireYear"]),
+                CreditCardCvv2 = form["CardCode"],
+                CustomValues = new Dictionary<string, object> {
+                    { upi, new { upi = upi } }
+                //    { creditCardName, new { creditCardName = creditCardName } } ,
+                //{ creditCardNumber, new { creditCardNumber = creditCardNumber } },
+                //{ creditCardExpireYear, new { creditCardExpireYear = creditCardExpireYear } },
+                //{ creditCardExpireMonth, new { creditCardExpireMonth = creditCardExpireMonth } },
+                //    { creditCardCvv2, new { creditCardCvv2 = creditCardCvv2 } }
+                }
+            
+            });
         }
 
         public async Task<string> GetPaymentMethodDescriptionAsync()
@@ -282,86 +327,373 @@ namespace Nop.Plugin.Payments.CashfreePayments
         }       
 
        
-        public Task<ProcessPaymentResult> ProcessPaymentAsync(ProcessPaymentRequest processPaymentRequest)
+        public async Task<ProcessPaymentResult> ProcessPaymentAsync(ProcessPaymentRequest processPaymentRequest)
         {
-            return Task.FromResult(new ProcessPaymentResult());
-
-        }
-        public async Task PostProcessPaymentAsync(PostProcessPaymentRequest postProcessPaymentRequest)
-        {
-            //get current store
-            var store = await _storeContext.GetCurrentStoreAsync();
-
-            //get current customer
-            var customer = await _workContext.GetCurrentCustomerAsync();
-
-            //get current order details
-            var order = (await _orderService.SearchOrdersAsync(store.Id,
-                customerId: customer.Id, pageSize: 1)).FirstOrDefault();
-
-            //get address of customer
-            var address = await _addressService.GetAddressByIdAsync(Convert.ToInt32(customer.BillingAddressId));
-
-            //get store location
-            var storeLocation = _webHelper.GetStoreLocation();
-
-            HttpRequestMessage request;
-            HttpResponseMessage response;
-            string responsebody;
-            var client = new HttpClient();
-            var url = _cashfreePaymentSettings.ActiveEnvironment == 0 ?
-                "https://sandbox.cashfree.com/pg/orders" :
-                "https://api.cashfree.com/pg/orders";      
-            
-            request = new HttpRequestMessage(HttpMethod.Post, url);
-            var stringdata = JsonConvert.SerializeObject(new CashfreeModel()
+            if (_cashfreePaymentSettings.PaymentType == 0)////AuthorizeAndCapture = 0 ,AuthorizeOnly = 1
             {
-                order_id = order.Id.ToString(),
-                order_amount = Convert.ToDouble(order.OrderTotal),
-                order_currency = order.CustomerCurrencyCode,
-                order_note = "order:"+ order.Id,
-                customer_details = new CustomerDetails()
+                return await Task.FromResult(new ProcessPaymentResult()
                 {
-                    customer_id = customer.Id.ToString(),
-                    customer_name = address.FirstName,
-                    customer_email = customer.Email,
-                    customer_phone = address.PhoneNumber
-                },
-                order_meta = new OrderMeta()
-                { 
-                    return_url = $"{storeLocation}Plugins/PaymentCashfree/HandleResponse?order_id={{order_id}}&order_token={{order_token}}",                 
-                    notify_url = $"{storeLocation}Plugins/PaymentCashfree/NotifyUrl",
-                    payment_methods = _cashfreePaymentSettings.PaymentMethods
-                }
-            });
-
-            var stringcontent = new StringContent(stringdata, Encoding.UTF8, "application/json");
-            request.Content = stringcontent;
-            List<NameValueHeaderValue> listheaders = new List<NameValueHeaderValue>();
-            listheaders.Add(new NameValueHeaderValue("x-api-version", _cashfreePaymentSettings.ApiVersion));
-            listheaders.Add(new NameValueHeaderValue("x-client-id", _cashfreePaymentSettings.AppID));
-            listheaders.Add(new NameValueHeaderValue("x-client-secret", _cashfreePaymentSettings.SecretKey));
-            foreach (var header in listheaders)
-            {
-                request.Headers.Add(header.Name, header.Value);
+                });
             }
 
-            response = await client.SendAsync(request);
-            responsebody = await response.Content.ReadAsStringAsync();
-            dynamic result = JsonConvert.DeserializeObject<ResponseModel>(responsebody);
 
-            if (response.ReasonPhrase == "Bad Request" || response.ReasonPhrase == "BadRequest")
+            var result = new ProcessPaymentResult
             {
-                throw new Exception(await _localizationService.GetResourceAsync(responsebody));
+                AllowStoringCreditCardNumber = true
+            };
+            ////return Task.FromResult(result);
+            //dynamic upiID = "";
+            //if (processPaymentRequest.CustomValues != null)
+            //{
 
-            }            
-            var payment_link = result.payment_link;
+            //    foreach (var i in processPaymentRequest.CustomValues)
+            //    {
+            //        upiID = i.Key.ToString();
 
-            //redirecting to the payment_link
-            _httpContextAccessor.HttpContext.Response.Redirect(payment_link);
+
+            //    }
+            //}
+            //    var p = new PostProcessPaymentRequest();
+            //    p.Order.CustomValuesXml = upiID;
+            //p.Order.CardCvv2 = processPaymentRequest.CreditCardCvv2;
+            //p.Order.CardExpirationMonth = processPaymentRequest.CreditCardExpireMonth.ToString();
+            //p.Order.CardExpirationYear = processPaymentRequest.CreditCardExpireYear.ToString();
+            //p.Order.CardName = processPaymentRequest.CreditCardName;
+            //p.Order.CardNumber = processPaymentRequest.CreditCardNumber;
+
+            return await Task.FromResult(result);
+
         }
 
-       
+        public async Task PostProcessPaymentAsync(PostProcessPaymentRequest postProcessPaymentRequest)
+        {
+            
+            if (_cashfreePaymentSettings.PaymentType != 0)////AuthorizeAndCapture = 0 ,AuthorizeOnly = 1
+            {
+                //-------------CREATE ORDER------------
+                //////
+                //////
+                //get current store
+                var store = await _storeContext.GetCurrentStoreAsync();
+
+                //get current customer
+                var customer = await _workContext.GetCurrentCustomerAsync();
+
+                //get current order details
+                var order = (await _orderService.SearchOrdersAsync(store.Id,
+                    customerId: customer.Id, pageSize: 1)).FirstOrDefault();
+
+                //get address of customer
+                var address = await _addressService.GetAddressByIdAsync(Convert.ToInt32(customer.BillingAddressId));
+
+                //get store location
+                var storeLocation = _webHelper.GetStoreLocation();
+
+                HttpRequestMessage request;
+                HttpResponseMessage response;
+                string responsebody;
+                var client = new HttpClient();
+                var url = _cashfreePaymentSettings.ActiveEnvironment == 0 ?
+                    "https://sandbox.cashfree.com/pg/orders" :
+                    "https://api.cashfree.com/pg/orders";
+
+                request = new HttpRequestMessage(HttpMethod.Post, url);
+                var stringdata = JsonConvert.SerializeObject(new CashfreeModel()
+                {
+                    order_id = order.Id.ToString(),
+                    order_amount = Convert.ToDouble(order.OrderTotal),
+                    order_currency = order.CustomerCurrencyCode,
+                    order_note = "order:" + order.Id,
+                    customer_details = new CustomerDetails()
+                    {
+                        customer_id = customer.Id.ToString(),
+                        customer_name = address.FirstName,
+                        customer_email = "fathima.p@manprax.com",
+                        customer_phone = address.PhoneNumber,
+                        customer_bank_account_number = "1234567890",
+                        customer_bank_ifsc = "HDFC0000102"
+                    },
+                    order_meta = new OrderMeta()
+                    {
+                        return_url = $"{storeLocation}Plugins/PaymentCashfree/HandleResponse?order_id={{order_id}}&order_token={{order_token}}",
+                        notify_url = $"{storeLocation}Plugins/PaymentCashfree/NotifyUrl",
+                        payment_methods = _cashfreePaymentSettings.PaymentMethods
+                    }
+                });
+
+                var stringcontent = new StringContent(stringdata, Encoding.UTF8, "application/json");
+                request.Content = stringcontent;
+                var listheaders = new List<NameValueHeaderValue>
+            {
+                new NameValueHeaderValue("x-api-version", _cashfreePaymentSettings.ApiVersion),
+                new NameValueHeaderValue("x-client-id", _cashfreePaymentSettings.AppID),
+                new NameValueHeaderValue("x-client-secret", _cashfreePaymentSettings.SecretKey)
+            };
+                foreach (var header in listheaders)
+                {
+                    request.Headers.Add(header.Name, header.Value);
+                }
+
+                response = await client.SendAsync(request);
+                responsebody = await response.Content.ReadAsStringAsync();
+                dynamic result = JsonConvert.DeserializeObject<ResponseModel>(responsebody);
+
+                if (response.ReasonPhrase == "Bad Request" || response.ReasonPhrase == "BadRequest")
+                {
+                    throw new Exception(await _localizationService.GetResourceAsync(responsebody));
+
+                }
+
+
+                //-----------PAYORDER---------------
+                ///////
+                ///////
+
+                HttpRequestMessage payOrderRequest;
+                HttpResponseMessage payOrderResponse;
+                string payOrderResponseBody;
+                var client2 = new HttpClient();
+                var payOrderUrl = _cashfreePaymentSettings.ActiveEnvironment == 0 ?
+                    "https://sandbox.cashfree.com/pg/orders/pay" :
+                    "https://api.cashfree.com/pg/orders/pay";
+
+                payOrderRequest = new HttpRequestMessage(HttpMethod.Post, payOrderUrl);
+                var stringdata2 = string.Empty;
+                var cardNumber = string.Empty;
+                var cardName = string.Empty;
+                var expireYear = string.Empty;
+                var cardExpireYear = string.Empty;
+                var cardExpireMonth = string.Empty;
+                var cardCvv = string.Empty;
+
+                //Decryting the card informations from paymentInfo
+                if (postProcessPaymentRequest.Order.AllowStoringCreditCardNumber)
+                {
+                    cardNumber = _encryptionService.DecryptText(postProcessPaymentRequest.Order.CardNumber);
+                    cardName = _encryptionService.DecryptText(postProcessPaymentRequest.Order.CardName);
+                    cardExpireMonth = _encryptionService.DecryptText(postProcessPaymentRequest.Order.CardExpirationMonth);
+                    cardCvv = _encryptionService.DecryptText(postProcessPaymentRequest.Order.CardCvv2);
+                    expireYear = _encryptionService.DecryptText(postProcessPaymentRequest.Order.CardExpirationYear);
+                    cardExpireYear = expireYear.Substring(expireYear.Length - 2);
+                }
+
+                //getting UpiId stored in the custom values
+                var doc = new XmlDocument();
+                doc.LoadXml(postProcessPaymentRequest.Order.CustomValuesXml);
+                XmlNodeList nodeList = doc.GetElementsByTagName("key");
+                var upiId = string.Empty;
+                foreach (XmlNode node in nodeList)
+                {
+                    upiId = node.InnerText;
+                }
+
+                //checking upiid is null
+                if (string.IsNullOrEmpty(upiId))
+                {
+                    //card data model for API
+                    stringdata2 = JsonConvert.SerializeObject(new PayOrderCardModel()
+                    {
+                        order_token = result.order_token,
+                        //save_instrument = true,
+                        payment_method = new PaymentMethodCard()
+                        {
+                            card = new CardPaymentMethod()
+                            {
+
+                                channel = "link", //or link
+                                card_cvv = cardCvv,
+                                card_expiry_mm = cardExpireMonth,
+                                card_expiry_yy = cardExpireYear,
+                                card_holder_name = cardName,
+                                card_number = cardNumber
+
+                            }
+                        },
+                    });
+
+                }
+                else
+                {
+                    //upi data model for API
+                    stringdata2 = JsonConvert.SerializeObject(new PayOrderUpiModel()
+                    {
+                        order_token = result.order_token,
+                        payment_method = new PaymentMethodUpi()
+                        {
+                            upi = new UpiPaymentMethod()
+                            {
+
+                                upi_id = upiId,//"testsuccess@gocash",
+                                authorize_only = false,
+                                channel = "collect",
+                                authorization = new UPIAuthorizedDetails()
+                                {
+                                    approve_by = (DateTime.Now.AddHours(5)).ToString("o"),
+                                    start_time = (DateTime.Now.AddDays(1)).ToString("o"),
+                                    end_time = (DateTime.Now.AddDays(2)).ToString("o") 
+                                }
+
+                            }
+                        },
+                    });
+                    
+                }
+
+                var stringcontent2 = new StringContent(stringdata2, Encoding.UTF8, "application/json");
+                payOrderRequest.Content = stringcontent2;
+                var listheaders2 = new List<NameValueHeaderValue>
+                {
+                    new NameValueHeaderValue("x-api-version", _cashfreePaymentSettings.ApiVersion),
+                    new NameValueHeaderValue("x-client-id", _cashfreePaymentSettings.AppID),
+                    new NameValueHeaderValue("x-client-secret", _cashfreePaymentSettings.SecretKey)
+                };
+                foreach (var header in listheaders2)
+                {
+                    payOrderRequest.Headers.Add(header.Name, header.Value);
+                }
+
+                payOrderResponse = await client2.SendAsync(payOrderRequest);
+                payOrderResponseBody = await payOrderResponse.Content.ReadAsStringAsync();
+                dynamic payOrderResult = JsonConvert.DeserializeObject<ResponseModel>(payOrderResponseBody);
+
+
+                if (payOrderResponse.ReasonPhrase == "Bad Request" || payOrderResponse.ReasonPhrase == "BadRequest")
+                {
+                    throw new Exception(await _localizationService.GetResourceAsync(payOrderResponseBody));
+
+                }
+
+                var paymentstatus = PaymentStatus.Authorized;
+                await ProcessPaymentstatusAsync(Convert.ToInt32(order.Id), paymentstatus, payOrderResult.cf_payment_id);
+                
+                await Task.CompletedTask;
+            }
+            else
+            {
+                //get current store
+                var store = await _storeContext.GetCurrentStoreAsync();
+
+                //get current customer
+                var customer = await _workContext.GetCurrentCustomerAsync();
+
+                //get current order details
+                var order = (await _orderService.SearchOrdersAsync(store.Id,
+                    customerId: customer.Id, pageSize: 1)).FirstOrDefault();
+
+                //get address of customer
+                var address = await _addressService.GetAddressByIdAsync(Convert.ToInt32(customer.BillingAddressId));
+
+                //get store location
+                var storeLocation = _webHelper.GetStoreLocation();
+
+                HttpRequestMessage request;
+                HttpResponseMessage response;
+                string responsebody;
+                var client = new HttpClient();
+                var url = _cashfreePaymentSettings.ActiveEnvironment == 0 ?
+                    "https://sandbox.cashfree.com/pg/orders" :
+                    "https://api.cashfree.com/pg/orders";
+
+                request = new HttpRequestMessage(HttpMethod.Post, url);
+                var stringdata = JsonConvert.SerializeObject(new CashfreeModel()
+                {
+                    order_id = order.Id.ToString(),
+                    order_amount = Convert.ToDouble(order.OrderTotal),
+                    order_currency = order.CustomerCurrencyCode,
+                    order_note = "order:" + order.Id,
+                    customer_details = new CustomerDetails()
+                    {
+                        customer_id = customer.Id.ToString(),
+                        customer_name = address.FirstName,
+                        customer_email = customer.Email,
+                        customer_phone = address.PhoneNumber,
+                        customer_bank_account_number = "1234567890",
+                        customer_bank_ifsc = "HDFC0000102"
+                    },
+                    order_meta = new OrderMeta()
+                    {
+                        return_url = $"{storeLocation}Plugins/PaymentCashfree/HandleResponse?order_id={{order_id}}&order_token={{order_token}}",
+                        notify_url = $"{storeLocation}Plugins/PaymentCashfree/NotifyUrl",
+                        payment_methods = _cashfreePaymentSettings.PaymentMethods
+                    }
+                });
+
+                var stringcontent = new StringContent(stringdata, Encoding.UTF8, "application/json");
+                request.Content = stringcontent;
+                var listheaders = new List<NameValueHeaderValue>
+                {
+                    new NameValueHeaderValue("x-api-version", _cashfreePaymentSettings.ApiVersion),
+                    new NameValueHeaderValue("x-client-id", _cashfreePaymentSettings.AppID),
+                    new NameValueHeaderValue("x-client-secret", _cashfreePaymentSettings.SecretKey)
+                };
+                foreach (var header in listheaders)
+                {
+                    request.Headers.Add(header.Name, header.Value);
+                }
+
+                response = await client.SendAsync(request);
+                responsebody = await response.Content.ReadAsStringAsync();
+                dynamic result = JsonConvert.DeserializeObject<ResponseModel>(responsebody);
+
+                if (response.ReasonPhrase == "Bad Request" || response.ReasonPhrase == "BadRequest")
+                {
+                    throw new Exception(await _localizationService.GetResourceAsync(responsebody));
+
+                }
+                var payment_link = result.payment_link;
+
+             _httpContextAccessor.HttpContext.Response.Redirect(payment_link);
+             
+            }
+            
+
+            
+        }
+        protected  async Task ProcessPaymentstatusAsync(int orderId, PaymentStatus newPaymentStatus, string cf_order_id)
+        {
+
+            var order = await _orderService.GetOrderByIdAsync(orderId);
+
+            if (order == null)
+            {
+                await _logger.ErrorAsync("Cashfree Order is not found");
+                return;
+            }
+
+            //order note
+            await _orderService.InsertOrderNoteAsync(new OrderNote
+            {
+                OrderId = orderId,
+                Note = $"Order status has been changed to{newPaymentStatus}",
+                DisplayToCustomer = false,
+                CreatedOnUtc = DateTime.UtcNow
+            });
+
+            switch (newPaymentStatus)
+            {
+                case PaymentStatus.Authorized:
+                    if (_orderProcessingService.CanMarkOrderAsAuthorized(order))
+                        await _orderProcessingService.MarkAsAuthorizedAsync(order);
+                    break;
+                case PaymentStatus.Paid:
+                    if (_orderProcessingService.CanMarkOrderAsPaid(order))
+                    {
+                        order.AuthorizationTransactionId = cf_order_id;
+                        await _orderService.UpdateOrderAsync(order);
+
+                        await _orderProcessingService.MarkOrderAsPaidAsync(order);
+                    }
+
+                    break;
+                case PaymentStatus.Voided:
+                    if (_orderProcessingService.CanVoidOffline(order))
+                        await _orderProcessingService.VoidOfflineAsync(order);
+
+                    break;
+            }
+
+        }
+
         public Task<ProcessPaymentResult> ProcessRecurringPaymentAsync(ProcessPaymentRequest processPaymentRequest)
         {
             return Task.FromResult(new ProcessPaymentResult { Errors = new[] { "Recurring payment not supported" } });
@@ -432,8 +764,30 @@ namespace Nop.Plugin.Payments.CashfreePayments
 
         public Task<IList<string>> ValidatePaymentFormAsync(IFormCollection form)
         {
-            return Task.FromResult<IList<string>>(new List<string>());
+            if (_cashfreePaymentSettings.PaymentType == 0)////AuthorizeAndCapture = 0 ,AuthorizeOnly = 1
+            {
+                return Task.FromResult<IList<string>>(new List<string>());
+            }
+            var warnings = new List<string>();
+
+            //validate
+            // var validator = new PaymentInfoValidator(_localizationService);
+            var model = new PaymentInfoModel
+            {
+                CardholderName = form["CardholderName"],
+                CardNumber = form["CardNumber"],
+                CardCode = form["CardCode"],
+                ExpireMonth = form["ExpireMonth"],
+                ExpireYear = form["ExpireYear"], 
+                UpiId = form["UpiId"]
+            };
+           // var validationResult = validator.Validate(model);
+            //if (!validationResult.IsValid)
+            //    warnings.AddRange(validationResult.Errors.Select(error => error.ErrorMessage));
+
+            return Task.FromResult<IList<string>>(warnings);
         }
+    
         
         public static PaymentStatus GetPaymentStatus(string paymentStatus)
         {

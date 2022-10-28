@@ -12,6 +12,10 @@ namespace Nop.Plugin.Payments.CashfreePayments.Models
         public string customer_name { get; set; }   
         public string customer_email { get; set; }
         public string customer_phone { get; set; }
+        public string customer_bank_account_number { get; set; }
+        public string customer_bank_ifsc { get; set; }
+        public string customer_bank_code { get; set; }
+
 
     }
 }

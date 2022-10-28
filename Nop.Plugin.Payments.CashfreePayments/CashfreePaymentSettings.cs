@@ -21,6 +21,10 @@ namespace Nop.Plugin.Payments.CashfreePayments
         public bool AdditionalFeePercentage { get; set; }
         //ApiVersion
          public string ApiVersion { get; set; }
+        /// <summary>
+        /// Gets or sets the payment type
+        /// </summary>
+        public PaymentType PaymentType { get; set; }
 
 
     }

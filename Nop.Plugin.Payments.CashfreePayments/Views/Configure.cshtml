@@ -25,7 +25,7 @@
                 @Html.Raw(T("Plugins.Payments.CashfreePayments.Instructions", $"{webHelper.GetStoreLocation()}Plugins/PaymentCashfree/HandleResponse"))
                 <div class="form-group row">
                     <div class="col-md-3">
-                        <nop-override-store-checkbox asp-for="Title_OverrideForStore" asp-input="Title" />@*asp-store-scope="@Model.ActiveStoreScopeConfiguration" />*@
+                        <nop-override-store-checkbox asp-for="Title_OverrideForStore" asp-input="Title" asp-store-scope="@Model.ActiveStoreScopeConfiguration" />
                         <nop-label asp-for="Title" />
                     </div>
                     <div class="col-md-9">
@@ -35,7 +35,7 @@
                 </div>
                 <div class="form-group row">
                     <div class="col-md-3">
-                        <nop-override-store-checkbox asp-for="AppID_OverrideForStore" asp-input="AppID" />@*asp-store-scope="@Model.ActiveStoreScopeConfiguration" />*@
+                        <nop-override-store-checkbox asp-for="AppID_OverrideForStore" asp-input="AppID"  asp-store-scope="@Model.ActiveStoreScopeConfiguration" />
                         <nop-label asp-for="AppID" />
                     </div>
                     <div class="col-md-9">
@@ -45,7 +45,7 @@
                 </div>
                 <div class="form-group row">
                     <div class="col-md-3">
-                        <nop-override-store-checkbox asp-for="SecretKey_OverrideForStore" asp-input="SecretKey" />@*asp-store-scope="@Model.ActiveStoreScopeConfiguration" />*@
+                        <nop-override-store-checkbox asp-for="SecretKey_OverrideForStore" asp-input="SecretKey"  asp-store-scope="@Model.ActiveStoreScopeConfiguration" />
                         <nop-label asp-for="SecretKey" />
                     </div>
                     <div class="col-md-9">
@@ -55,7 +55,7 @@
                 </div>
                 <div class="form-group row">
                     <div class="col-md-3">
-                        <nop-override-store-checkbox asp-for="Description_OverrideForStore" asp-input="Description"/> @*asp-store-scope="@Model.ActiveStoreScopeConfiguration" />*@
+                        <nop-override-store-checkbox asp-for="Description_OverrideForStore" asp-input="Description" asp-store-scope="@Model.ActiveStoreScopeConfiguration" />
                         <nop-label asp-for="Description" />
                     </div>
                     <div class="col-md-9">
@@ -65,7 +65,7 @@
                 </div> 
                 <div class="form-group row">
                     <div class="col-md-3">
-                        <nop-override-store-checkbox asp-for="ActiveEnvironmentId_OverrideForStore" asp-input="ActiveEnvironmentId" />@*asp-store-scope="@Model.ActiveStoreScopeConfiguration" />*@
+                        <nop-override-store-checkbox asp-for="ActiveEnvironmentId_OverrideForStore" asp-input="ActiveEnvironmentId" asp-store-scope="@Model.ActiveStoreScopeConfiguration" />
                         <nop-label asp-for="ActiveEnvironmentValues" />
                     </div>
                     <div class="col-md-9">
@@ -73,10 +73,29 @@
                         <span asp-validation-for="ActiveEnvironmentId"></span>
                     </div>
                 </div>
-
                  <div class="form-group row">
                     <div class="col-md-3">
-                        <nop-override-store-checkbox asp-for="PaymentMethods_OverrideForStore" asp-input="PaymentMethods" />@*asp-store-scope="@Model.ActiveStoreScopeConfiguration" />*@
+                        <nop-override-store-checkbox asp-for="ApiVersion_OverrideForStore" asp-input="ApiVersion" asp-store-scope="@Model.ActiveStoreScopeConfiguration" />
+                        <nop-label asp-for="ApiVersion" />
+                    </div>
+                    <div class="col-md-9">
+                        <nop-editor asp-for="ApiVersion" />
+                        <span asp-validation-for="ApiVersion"></span>
+                    </div>
+                </div>
+                <div class="form-group row">
+                    <div class="col-md-3">
+                        <nop-override-store-checkbox asp-for="PaymentTypeId_OverrideForStore" asp-input="PaymentTypeId" asp-store-scope="@Model.ActiveStoreScopeConfiguration" />
+                        <nop-label asp-for="PaymentTypeValues" />
+                    </div>
+                    <div class="col-md-9">
+                        <nop-select asp-for="PaymentTypeId" asp-items="Model.PaymentTypeValues" />
+                        <span asp-validation-for="PaymentTypeId"></span>
+                    </div>
+                </div>
+                 <div class="form-group row">
+                    <div class="col-md-3">
+                        <nop-override-store-checkbox asp-for="PaymentMethods_OverrideForStore" asp-input="PaymentMethods" asp-store-scope="@Model.ActiveStoreScopeConfiguration" />
                         <nop-label asp-for="PaymentMethods" />
                     </div>
                    <div class="col-md-9">
@@ -86,30 +105,30 @@
                                 <li>
                                     @T("Plugins.Payments.CashfreePayments.Fields.PaymentMethods.UPI")
                                 </li>
-                                <li>
+                               @* <li>
                                     @T("Plugins.Payments.CashfreePayments.Fields.PaymentMethods.Description.CC")
                                 </li>
                                 <li>
                                     @T("Plugins.Payments.CashfreePayments.Fields.PaymentMethods.Description.DC")
-                                </li>
+                                </li>*@
                                 <li>
                                     @T("Plugins.Payments.CashfreePayments.Fields.PaymentMethods.Description.NB")
                                 </li>
-                                <li>
+                                @*<li>
                                     @T("Plugins.Payments.CashfreePayments.Fields.PaymentMethods.Description.EMI")
                                 </li>                                
                                 <li>
                                     @T("Plugins.Payments.CashfreePayments.Fields.PaymentMethods.Description.PAYPAL")
-                                </li>
+                                </li>*@
                                @* <li>
                                     @T("Plugins.Payments.CashfreePayments.Fields.PaymentMethods.Description.CCC")
                                 </li>
                                 <li>
                                     @T("Plugins.Payments.CashfreePayments.Fields.PaymentMethods.Description.PPC")
                                 </li>*@
-                                <li>
+                               @* <li>
                                     @T("Plugins.Payments.CashfreePayments.Fields.PaymentMethods.Description.PAYLATER")
-                                </li>
+                                </li>*@
                                 <li>
                                     @T("Plugins.Payments.CashfreePayments.Fields.PaymentMethods.Description.Instructions")
                                 </li>
@@ -118,16 +137,7 @@
                         
                 </div>
 
-                <div class="form-group row">
-                    <div class="col-md-3">
-                        <nop-override-store-checkbox asp-for="ApiVersion_OverrideForStore" asp-input="ApiVersion"/> @*asp-store-scope="@Model.ActiveStoreScopeConfiguration" />*@
-                        <nop-label asp-for="ApiVersion" />
-                    </div>
-                    <div class="col-md-9">
-                        <nop-editor asp-for="ApiVersion" />
-                        <span asp-validation-for="ApiVersion"></span>
-                    </div>
-                </div>
+               
                 
                 <div class="form-group row">
                     <div class="col-md-9 offset-md-3">

@@ -1,6 +1,7 @@
 C:\Users\FathimaP\Downloads\nopCommerce_4.50.3_Source\src\Presentation\Nop.Web\Plugins\Payments.CashfreePayments\logo.jpg
 C:\Users\FathimaP\Downloads\nopCommerce_4.50.3_Source\src\Presentation\Nop.Web\Plugins\Payments.CashfreePayments\plugin.json
 C:\Users\FathimaP\Downloads\nopCommerce_4.50.3_Source\src\Presentation\Nop.Web\Plugins\Payments.CashfreePayments\Views\Configure.cshtml
+C:\Users\FathimaP\Downloads\nopCommerce_4.50.3_Source\src\Presentation\Nop.Web\Plugins\Payments.CashfreePayments\Views\PaymentInfoRedirect.cshtml
 C:\Users\FathimaP\Downloads\nopCommerce_4.50.3_Source\src\Presentation\Nop.Web\Plugins\Payments.CashfreePayments\Views\PaymentInfo.cshtml
 C:\Users\FathimaP\Downloads\nopCommerce_4.50.3_Source\src\Presentation\Nop.Web\Plugins\Payments.CashfreePayments\Views\_ViewImports.cshtml
 C:\Users\FathimaP\Downloads\nopCommerce_4.50.3_Source\src\Presentation\Nop.Web\Plugins\Payments.CashfreePayments\Nop.Plugin.Payments.CashfreePayments.deps.json
