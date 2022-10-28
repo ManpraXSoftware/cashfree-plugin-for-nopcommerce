@@ -297,11 +297,7 @@ namespace Nop.Plugin.Payments.CashfreePayments
                 CreditCardCvv2 = form["CardCode"],
                 CustomValues = new Dictionary<string, object> {
                     { upi, new { upi = upi } }
-                //    { creditCardName, new { creditCardName = creditCardName } } ,
-                //{ creditCardNumber, new { creditCardNumber = creditCardNumber } },
-                //{ creditCardExpireYear, new { creditCardExpireYear = creditCardExpireYear } },
-                //{ creditCardExpireMonth, new { creditCardExpireMonth = creditCardExpireMonth } },
-                //    { creditCardCvv2, new { creditCardCvv2 = creditCardCvv2 } }
+                
                 }
             
             });
@@ -340,26 +336,7 @@ namespace Nop.Plugin.Payments.CashfreePayments
             var result = new ProcessPaymentResult
             {
                 AllowStoringCreditCardNumber = true
-            };
-            ////return Task.FromResult(result);
-            //dynamic upiID = "";
-            //if (processPaymentRequest.CustomValues != null)
-            //{
-
-            //    foreach (var i in processPaymentRequest.CustomValues)
-            //    {
-            //        upiID = i.Key.ToString();
-
-
-            //    }
-            //}
-            //    var p = new PostProcessPaymentRequest();
-            //    p.Order.CustomValuesXml = upiID;
-            //p.Order.CardCvv2 = processPaymentRequest.CreditCardCvv2;
-            //p.Order.CardExpirationMonth = processPaymentRequest.CreditCardExpireMonth.ToString();
-            //p.Order.CardExpirationYear = processPaymentRequest.CreditCardExpireYear.ToString();
-            //p.Order.CardName = processPaymentRequest.CreditCardName;
-            //p.Order.CardNumber = processPaymentRequest.CreditCardNumber;
+            };            
 
             return await Task.FromResult(result);
 
