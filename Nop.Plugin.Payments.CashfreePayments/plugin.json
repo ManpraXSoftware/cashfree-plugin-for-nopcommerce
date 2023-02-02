@@ -3,9 +3,9 @@
   "FriendlyName": "Cashfree Payments",
   "SystemName": "Payments.CashfreePayments",
   "Version": "1.0",
-  "SupportedVersions": [ "4.50" ],
-  "Author": "Manprax Software LLP",
-  "DisplayOrder": 0,
+  "SupportedVersions": [ "4.60" ],
+   "Author": "Manprax Software LLP",  
+  "DisplayOrder": 1,
   "FileName": "Nop.Plugin.Payments.CashfreePayments.dll",
   "Description": "This plugin allows paying with Cashfree Payments"
 }

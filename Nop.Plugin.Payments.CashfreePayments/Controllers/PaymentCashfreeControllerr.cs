@@ -262,8 +262,60 @@ namespace Nop.Plugin.Payments.CashfreePayments.Controllers
            
 
             return RedirectToRoute("CheckoutCompleted", new { orderId = order.Id });
-        }      
-        
+        }
+
+        public async Task<IActionResult> SubscriptionReturnUrl()
+        {
+            //(AuthorizationTransactionResult in processpaymentresult used to store data related with authorization)
+
+           
+
+            await using var stream = new MemoryStream();
+            await Request.Body.CopyToAsync(stream);
+            var strRequest = Encoding.ASCII.GetString(stream.ToArray());
+            dynamic result = JsonConvert.DeserializeObject(strRequest);
+
+            // Generate the signature.
+            var secretkey = _cashfreePaymentSettings.SecretKey;
+
+            var timestamp = Request.Headers["x-webhook-timestamp"];
+            var signature = Request.Headers["x-webhook-signature"];
+            var sign = result.signature;
+
+            var generatedSignature = ComputeSignature(secretkey, timestamp, strRequest);
+
+            //verify the signature
+            if (signature != generatedSignature)
+            {
+                return BadRequest("Failed to verify signature");
+            }
+
+            
+            var cf_subReferenceId = (result.cf_subReferenceId).ToString();
+            
+            var cf_status = result.cf_status;  //Status of the subscription. In the returnUrl, the response should be ACTIVE or BANK_APPROVAL_PENDING if the authorization was successful or INITIALIZED if the authorization failed.
+            
+            var cf_checkoutStatus = result.cf_checkoutStatus; //The subscription checkout status. The status can be SUCCESS, FAILED, SUCCESS_DEBIT_PENDING, SUCCESS_TOKENIZATION_PENDING
+            
+            var cf_subscriptionPaymentId = (result.cf_subscriptionPaymentId); //The subscription payment ID.
+
+            //get the order by order_id
+          //  var order = await _orderService.Get(Convert.ToInt32());
+
+
+            //update payment status and subscription status
+            if (cf_status == "ACTIVE" || cf_status == "BANK_APPROVAL_PENDING")
+            {
+                ProcessPaymentResult processPaymentResult;
+                ProcessPaymentRequest processPaymentRequest;
+                //processPaymentRequest.
+             //   processPaymentResult.AuthorizationTransactionResult
+            }
+                                                                             
+            return Ok();
+        }
+
+
         private string ComputeSignature(string secret,string timestamp,string strRequest)
         {         
             var body = timestamp + strRequest;

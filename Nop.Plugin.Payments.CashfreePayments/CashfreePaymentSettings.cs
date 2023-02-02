@@ -26,6 +26,11 @@ namespace Nop.Plugin.Payments.CashfreePayments
         /// </summary>
         public PaymentType PaymentType { get; set; }
 
+        /// <summary>
+        /// Gets or sets a subscription status after processing
+        /// </summary>
+        public SubscriptionStatus NewSubscriptionStatus { get; set; } = SubscriptionStatus.PENDING;
+
 
     }
 }
